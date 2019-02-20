@@ -1,4 +1,9 @@
 
+/********************************************
+*   所有者      : Relvin
+*   创建时间    : 2019年02月16日10:58:10
+*   功能描述    : TableView
+*********************************************/
 
 if (!Array.prototype.remove) {
     Array.prototype.remove = function(value) {
@@ -49,7 +54,7 @@ let TableView = cc.Class({
         _defaultScrollIdx: 0,       // 默认滚动位置
         // _
         _vordring: VerticalFillOrder.TOP_DOWN,
-        // _specialSize: [],       // 特殊cell的宽高
+
         _vCellsPositions: [],       // cell的位置信息
         _cellPool: null,            // cell缓存池
         _needReload: false,         // 是否需要重新加载
@@ -57,7 +62,8 @@ let TableView = cc.Class({
         _showDetail: false,         // 是否显示详情
         _detailNodeSize: cc.size(0,0),// 详情大小
         _detailIndex: -1,           // 详情显示的索引
-        
+        _maxUsdCnt: 0,              // 最大显示数量
+        _detailFunc: null,          // 详情显示回调
         _cellUpdateFunc: null,      // cell刷新回调
         _cellCreateFunc: null,      // cell显示回调
         _cellRecycleFunc: null,     // cell回收回调
@@ -97,10 +103,10 @@ let TableView = cc.Class({
         self.content.setAnchorPoint(0, 0);
         let cellPool = new cc.NodePool("cell-pool");
         self._cellPool = cellPool;
-        // self._vordring = 1;
-        let cellNode = self._getCellNode();
-        self._cellSize.set(cellNode.getContentSize());
-        self._recycleCellNode(cellNode);
+        // self._vordring = 1; // 测试使用
+        let cell = self._getCellNode();
+        self._cellSize.set(cell.getContentSize());
+        self._recycleCell(cell);
 
         if (this.direction === Direction.VERTICAL) {
             this.vertical = true;
@@ -131,6 +137,10 @@ let TableView = cc.Class({
         }
     },
 
+    setDetailHandler (handler) {
+        this._detailFunc = handler;
+    },
+
     showDetailForIndex (index) {
         let self = this;
         if (self._showDetail && self._detailIndex === index) {
@@ -140,8 +150,17 @@ let TableView = cc.Class({
         if (!detailNode) {
             return self;
         }
+        let lastCell = self.cellAtIndex(self._detailIndex);
+        if (lastCell) {
+            self._execUpdateHandler(lastCell);
+        }
         self._detailIndex = index;
         detailNode.active = true;
+        let cell = self.cellAtIndex(index);
+        if (self._detailFunc) {
+            self._detailFunc(self, index, cell, detailNode);
+        }
+        self._execUpdateHandler(cell);
         self._updateDetailNodePosition(index);
 
         let offset = self.getContentTopOffset();
@@ -151,21 +170,15 @@ let TableView = cc.Class({
         self._updateCellsPosition();
 
         self.scrollToOffset(offset);
-        self._showDetailCellInView();
+        self._scrollDetailCellInView();
         return self;
     },
 
-    _showDetailCellInView () {
+    _scrollDetailCellInView () {
         let self = this;
         let offset = self.getContentOffset();
-        let index = self._detailIndex;
         let position = self._offsetFromIndex(self._detailIndex, true);
         position.addSelf(offset);
-
-        let detailSize = self._detailNodeSize;
-        let viewSize = self._view.getContentSize();
-        let cellSize = self.cellSizeForIndex(index);
-
 
         switch (self.direction) {
             case Direction.HORIZONTAL:
@@ -183,7 +196,6 @@ let TableView = cc.Class({
                 break;
             }
         }
-        // console.log(position);
     },
 
     _updateDetailNodePosition (index) {
@@ -218,6 +230,10 @@ let TableView = cc.Class({
         }
         detailNode.active = false;
         self._showDetail = false;
+
+        let cell = self.cellAtIndex(self._detailIndex);
+        self._execUpdateHandler(cell);
+
         self._detailIndex = -1;
         let offset = self.getContentTopOffset();
         self._updateContentSize();
@@ -245,6 +261,17 @@ let TableView = cc.Class({
         let self = this;
         self._cellUpdateFunc = callFunc;
         return self;
+    },
+
+    _execUpdateHandler(cell) {
+        if (!cell) {
+            return;
+        }
+        let self = this;
+        let updateFunc = self._cellUpdateFunc;
+        if (updateFunc) {
+            updateFunc(self, cell._kIdx, cell);
+        }
     },
 
     setCellSizeHandler(callFunc) {
@@ -302,13 +329,7 @@ let TableView = cc.Class({
 
         let cellsUsed = self._cellsUsed;
         for (let idx = 0, len = cellsUsed.length; idx < len; idx++) {
-            let cell = cellsUsed[idx];
-            if (cell) {
-                let updateFunc = self._cellUpdateFunc;
-                if (updateFunc) {
-                    updateFunc(self, cell._kIdx, cell);
-                }
-            }
+            self._execUpdateHandler(cellsUsed[idx]);
         }
         
         return self;
@@ -322,30 +343,30 @@ let TableView = cc.Class({
 
     _getCellNode () {
         let self = this;
-        let cellNode = self._cellPool.get();
-        if (!cellNode) {
-            cellNode = cc.instantiate(self.cellPrefab);
+        let cell = self._cellPool.get();
+        if (!cell) {
+            cell = cc.instantiate(self.cellPrefab);
         }
-        cellNode._kIdx = CC_INVALID_INDEX;
+        cell._kIdx = CC_INVALID_INDEX;
         let createFunc = self._cellCreateFunc;
         if (createFunc) {
-            createFunc(self, cellNode);
+            createFunc(self, cell);
         }
-        return cellNode;
+        return cell;
     },
 
-    _recycleCellNode (cellNode) {
+    _recycleCell (cell) {
         let self = this;
-        if (cellNode._kIdx !== CC_INVALID_INDEX) {
+        if (cell._kIdx !== CC_INVALID_INDEX) {
             let recycleFunc = self._cellRecycleFunc;
             if (recycleFunc) {
-                recycleFunc(self, cellNode._kIdx, cellNode);
+                recycleFunc(self, cell._kIdx, cell);
             }
-            self._indices.remove(cellNode._kIdx);
-            self._cellsUsed.remove(cellNode);
-            cellNode._kIdx = CC_INVALID_INDEX;
+            self._indices.remove(cell._kIdx);
+            self._cellsUsed.remove(cell);
+            cell._kIdx = CC_INVALID_INDEX;
         }
-        self._cellPool.put(cellNode);
+        self._cellPool.put(cell);
     },
 
     _reloadData () {
@@ -354,12 +375,14 @@ let TableView = cc.Class({
         let idx = cellsUsed.length - 1;
         while (idx >= 0) {
             let cell = cellsUsed[idx--];
-            this._recycleCellNode(cell);
+            this._recycleCell(cell);
         }
         self._cellsUsed.clear();
         self._indices.clear();
         self._updateCellPositions();
         self._updateContentSize();
+        let usedCount = self._cellsUsed.length;
+        self._maxUsdCnt = Math.max(self._maxUsdCnt, usedCount);
     },
 
     _updateCellPositions () {
@@ -431,16 +454,6 @@ let TableView = cc.Class({
         }
     },
 
-    // minContainerOffset() {
-    //     let content = this.content;
-    //     let anchorPoint = content.getAnchorPoint();
-    //     let contW = content.width * content.scaleX;
-    //     let contH = content.height * content.scaleY;
-
-    //     let viewSize = this._view.getContentSize();
-    //     return cc.v2(viewSize.width - (1 - anchorPoint.x) * contW, viewSize.height - (1 - anchorPoint.y) * contH);
-    // },
-
     scrollViewDidScroll() {
         let self = this;
         let cellCount = self._cellCout;
@@ -462,9 +475,11 @@ let TableView = cc.Class({
         let offsetY = self._vordring === VerticalFillOrder.TOP_DOWN ? vHeight : 0;
         offsetY += offset.y;
         
+        let maxUsdCnt = self._maxUsdCnt;
         let startIdx = self._indexFromOffset(offset.x, offsetY);
         let maxIdx = Math.max(0, cellCount - 1);
         startIdx = startIdx === CC_INVALID_INDEX ? maxIdx : startIdx;
+        
         if (self._vordring === VerticalFillOrder.TOP_DOWN) {
             offsetY = offset.y;
         }
@@ -475,7 +490,17 @@ let TableView = cc.Class({
         
         let endIdx = self._indexFromOffset(offset.x, offsetY);
         endIdx = endIdx === CC_INVALID_INDEX ? maxIdx : endIdx;
-        
+
+        // 优化滑动到超过边界会被无故更新问题
+        if (endIdx < (startIdx + maxUsdCnt - 1)) {
+            if (startIdx === 0) {
+                endIdx = Math.max(endIdx, startIdx + maxUsdCnt - 1);
+                endIdx = Math.min(endIdx, maxIdx);
+            }
+            else if (endIdx === maxIdx) {
+                startIdx = Math.min(startIdx, endIdx - maxUsdCnt + 1);
+            }
+        }
         { // 限定局部变量作用域
             let cell = cellsUsed[0];
             while (cell && cell._kIdx < startIdx) {
@@ -563,7 +588,8 @@ let TableView = cc.Class({
         let anchorPoint = cell.getAnchorPoint();
 
         if (self.direction === Direction.HORIZONTAL) {
-            // self.scrollToLeft();
+            position.x += anchorPoint.x * cellSize.width;
+            position.y = (viewSize.height * 0.5 + (anchorPoint.y - 0.5) * cellSize.height);
         }
         else {
             position.x = (viewSize.width * 0.5 + (anchorPoint.x - 0.5) * cellSize.width);
@@ -621,20 +647,20 @@ let TableView = cc.Class({
     },
 
     _addCellIfNecessary (cell) {
+        if (!cell) {
+            return;
+        }
         let self = this;
         cell.parent = self.content;
         self._cellsUsed.push(cell);
         self._indices.push(cell._kIdx);
         self._isUsedCellsDirty = true;
-        let updateFunc = self._cellUpdateFunc;
-        if (updateFunc) {
-            updateFunc(self, cell._kIdx, cell);
-        }
+        self._execUpdateHandler(cell);
     },
 
-    _moveCellOutOfSight (cellNode) {
+    _moveCellOutOfSight (cell) {
         let self = this;
-        self._recycleCellNode(cellNode);
+        self._recycleCell(cell);
         self._isUsedCellsDirty = true;
     },
 

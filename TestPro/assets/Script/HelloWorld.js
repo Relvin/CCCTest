@@ -41,8 +41,8 @@ cc.Class({
                 cell.updateLayerInfo(index);
             }
         })
-        .setTopKeep(10)
-        .setBottomKeep(10)
+        // .setTopKeep(10)
+        // .setBottomKeep(10)
         // .setCellSizeHandler(function (index) {
         //     return index == selectIdx ? cc.size(0, 100) : null;
         // })
