@@ -60,6 +60,7 @@ let TableView = cc.Class({
         _needReload: false,         // 是否需要重新加载
         _resetOffset: false,        // 是否需要重置偏移
         _showDetail: false,         // 是否显示详情
+        _detailY: 0,
         _detailNodeSize: cc.size(0,0),// 详情大小
         _detailIndex: -1,           // 详情显示的索引
         _maxUsdCnt: 0,              // 最大显示数量
@@ -205,6 +206,7 @@ let TableView = cc.Class({
             return;
         }
         let position = self._offsetFromIndex(index, true);
+        self._detailY = position.y;
         detailNode.y = position.y + detailNode.anchorY * detailNode.height;
     },
 
@@ -545,8 +547,8 @@ let TableView = cc.Class({
         // 使用二分查找
         while (high >= low) {
             let index = low + Math.floor((high - low) * 0.5);
-            let cellStart = vCellPos[index];
-            let cellEnd = vCellPos[index + 1];
+            let cellStart = vCellPos[index] + self._getCellAddByIndex(index);
+            let cellEnd = vCellPos[index + 1] + self._getCellAddByIndex(index + 1);
             if (search >= cellStart && search <= cellEnd) {
                 return index;
             }
@@ -563,6 +565,24 @@ let TableView = cc.Class({
         }
 
         return CC_INVALID_INDEX;
+    },
+
+    _getCellAddByIndex (index) {
+        let self = this;
+        let add = 0;
+        if (self._showDetail) {
+            if (self._vordring === VerticalFillOrder.TOP_DOWN) {
+                if (index > self._detailIndex) {
+                    add = self._detailNodeSize.height;
+                }
+            }
+            else {
+                if (index >= self._detailIndex) {
+                    add = self._detailNodeSize.height;
+                }
+            }
+        }
+        return add;
     },
 
     cellAtIndex (idx) {
@@ -635,7 +655,7 @@ let TableView = cc.Class({
                 }
                 else {
                     if (self._showDetail) {
-                        if (index >= detailIndex) {
+                        if (index >= detailIndex && !isDetail) {
                             offset.y += detailSize.height;
                         }
                     }
